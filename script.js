@@ -111,7 +111,7 @@ function callAI(messages, isIdle) {
     });
 }
 
-/* ============ 发送消息 ============ */
+/* ============ 发送消息（立即显示 + 后台保存） ============ */
 function sendMessage() {
     var name = nameInput.value.trim() || '匿名';
     var text = msgInput.value.trim();
@@ -121,38 +121,47 @@ function sendMessage() {
     sendBtn.disabled = true;
     msgInput.value = '';
 
-    // 保存用户消息
+    // ★ 立即显示消息，不等数据库
+    var selfHtml = '<div class="msg self user" data-id="opt_' + Date.now() + '">' +
+        '<div class="msg-avatar">😎</div>' +
+        '<div class="msg-body">' +
+            '<span class="msg-name">' + esc(name) + '</span>' +
+            '<div class="msg-bubble">' + esc(text) + '</div>' +
+        '</div></div>';
+    chatBox.insertAdjacentHTML('beforeend', selfHtml);
+    scrollToBottom();
+    resetIdleTimer();
+
+    // 后台存数据库 + 调 AI
     fetch(API + '/rest/v1/' + TABLE, {
         method: 'POST',
         headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ name: name, content: text })
     }).then(function() {
-        knownIds = {};  // 清空缓存，强制全量刷新
-        loadMessages(true);
-        resetIdleTimer();  // 有人说话了，重置空闲计时器
-
-        // 取最近几条消息作为 AI 上下文
+        // 获取最近几条消息作为 AI 上下文
         var recent = [{ name: name, content: text }];
-        var items = chatBox.querySelectorAll('.msg');
-        var ctx = [];
-        for (var i = Math.max(0, items.length - 5); i < items.length; i++) {
-            var n = items[i].querySelector('.msg-name');
-            var b = items[i].querySelector('.msg-bubble');
-            if (n && b) ctx.push({ name: n.textContent.replace('AI','').trim(), content: b.textContent });
-        }
-        if (ctx.length > 1) recent = ctx;
-
         return callAI(recent);
     }).then(function(aiReply) {
-        resetIdleTimer();  // AI回复了，重置空闲计时
-        // 保存 AI 回复
+        // ★ 立即显示 AI 回复
+        if (aiReply) {
+            var aiHtml = '<div class="msg ai" data-id="ai_' + Date.now() + '">' +
+                '<div class="msg-avatar">🤖</div>' +
+                '<div class="msg-body">' +
+                    '<span class="msg-name">AI<span class="ai-tag">AI</span></span>' +
+                    '<div class="msg-bubble">' + esc(aiReply) + '</div>' +
+                '</div></div>';
+            chatBox.insertAdjacentHTML('beforeend', aiHtml);
+            scrollToBottom();
+        }
+        // 后台存 AI 回复
         return fetch(API + '/rest/v1/' + TABLE, {
             method: 'POST',
             headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
             body: JSON.stringify({ name: 'AI', content: aiReply, is_ai: true })
         });
     }).then(function() {
-        loadMessages(true);
+        knownIds = {};
+        loadMessages(false);
         loading = false;
         sendBtn.disabled = false;
     }).catch(function() {
