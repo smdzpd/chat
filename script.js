@@ -72,7 +72,7 @@ function sendIdleMessage() {
             headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
             body: JSON.stringify({ name: 'AI', content: reply, is_ai: true })
         });
-    }).then(function() { loadMessages(true); }).catch(function(){});
+    }).then(function() { knownIds = {}; loadMessages(true); if(idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(sendIdleMessage, IDLE_TIME); }).catch(function(){});
 }
 
 function callAI(messages, isIdle) {
@@ -127,6 +127,7 @@ function sendMessage() {
         headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ name: name, content: text })
     }).then(function() {
+        knownIds = {};  // 清空缓存，强制全量刷新
         loadMessages(true);
         resetIdleTimer();  // 有人说话了，重置空闲计时器
 
