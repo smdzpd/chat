@@ -22,11 +22,63 @@ nameInput.addEventListener('change', function() {
 
 /* ============ AI 自动回复（DeepSeek） ============ */
 var AI_KEY = 'sk-01d0c91cadab456abb9e714a27adfd6c';
-var AI_MODEL = 'deepseek-chat'; // 可选: deepseek-chat / deepseek-reasoner
+var AI_MODEL = 'deepseek-chat';
 
-function callAI(messages) {
+/* ============ AI 人格设定（基于聊天记录学习） ============ */
+var AI_PERSONA = '你是一个叫7的聊天伙伴，以下是你的说话风格：\n\
+1. 说话极短，大部分消息不超过10个字\n\
+2. 爱用表情和表情包，一张图能表达就不打字\n\
+3. 喜欢调侃和反问，说话带点贱兮兮的幽默感\n\
+4. 经常用"？""。。""啥""吗""吧""呗"这些语气词\n\
+5. 接话很快，常吐槽，但语气是友好的\n\
+6. 偶尔发"[白眼]""[委屈]"等表情\n\
+7. 不会长篇大论，一句话解决\n\
+8. 没人说话时会主动问"？""人呢""好无聊"\n\
+\n\
+以下是你的说话例子：\n\
+"呦""。。""？""鱼来的""使劲想想""多大点事"\n\
+"你不是和她宝子吗""啥意思""你是狗 那你不领"\n\
+"？所以啥意思""你分饰多角呢""给你机会重新说"\n\
+"吃不吃瓜""我又不是天天挂这""？。？"\n\
+"品味不错[强]""记得吗""又来了""辛苦辛苦"\n\
+"加油""多帅""你才看到吗""想不想要这个"\n\
+"对的""好""包的""不信""哦。""嗯哼""呗"\n\
+\n\
+现在你就是7，在多人聊天室里，按你的风格回复。';
+
+var idleTimer = null;
+var IDLE_TIME = 60000; // 60秒没人说话，AI主动发一句
+
+function resetIdleTimer() {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(sendIdleMessage, IDLE_TIME);
+}
+
+function sendIdleMessage() {
+    // 取最近几条消息作为上下文
+    var recent = [];
+    var items = chatBox.querySelectorAll('.msg');
+    var ctx = [];
+    for (var i = Math.max(0, items.length - 3); i < items.length; i++) {
+        var n = items[i].querySelector('.msg-name');
+        var b = items[i].querySelector('.msg-bubble');
+        if (n && b) ctx.push({ name: n.textContent.replace('AI','').trim(), content: b.textContent });
+    }
+    if (ctx.length > 0) recent = ctx;
+
+    callAI(recent, true).then(function(reply) {
+        return fetch(API + '/rest/v1/' + TABLE, {
+            method: 'POST',
+            headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify({ name: 'AI', content: reply, is_ai: true })
+        });
+    }).then(function() { loadMessages(true); }).catch(function(){});
+}
+
+function callAI(messages, isIdle) {
     // 构建对话上下文
-    var systemMsg = '你是一个友好的聊天机器人，在多人聊天室里和大家聊天。回复简短自然，一句话即可，不要超过50字。可以用表情。';
+    var systemMsg = AI_PERSONA;
+    if (isIdle) systemMsg += '\n（注意：聊天室已经冷场好久了，你主动说一句打破沉默，简短一点）';
     var chatMsgs = [{ role: 'system', content: systemMsg }];
     for (var i = 0; i < messages.length; i++) {
         chatMsgs.push({ role: 'user', content: messages[i].name + '说：' + messages[i].content });
@@ -76,6 +128,7 @@ function sendMessage() {
         body: JSON.stringify({ name: name, content: text })
     }).then(function() {
         loadMessages(true);
+        resetIdleTimer();  // 有人说话了，重置空闲计时器
 
         // 取最近几条消息作为 AI 上下文
         var recent = [{ name: name, content: text }];
@@ -90,6 +143,7 @@ function sendMessage() {
 
         return callAI(recent);
     }).then(function(aiReply) {
+        resetIdleTimer();  // AI回复了，重置空闲计时
         // 保存 AI 回复
         return fetch(API + '/rest/v1/' + TABLE, {
             method: 'POST',
@@ -185,3 +239,4 @@ function esc(s) {
 /* ============ 启动 ============ */
 loadMessages();
 setInterval(function() { loadMessages(false); }, 2000);
+resetIdleTimer(); // 启动空闲计时器
