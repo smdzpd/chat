@@ -20,29 +20,42 @@ nameInput.addEventListener('change', function() {
     localStorage.setItem('chat_name', nameInput.value.trim() || '');
 });
 
-/* ============ AI 自动回复（占位）====================
- * 用户提供 API 后替换此函数即可
- * 参数: messages - 最近 N 条聊天记录 [{name, content}]
- * 返回: AI 回复文本
- * ================================================ */
-function callAI(messages) {
-    // ★ 在这里接入你的 AI API ★
-    // 示例：fetch('你的API地址', { method:'POST', body: JSON.stringify({messages}) })
+/* ============ AI 自动回复（DeepSeek） ============ */
+var AI_KEY = 'sk-01d0c91cadab456abb9e714a27adfd6c';
+var AI_MODEL = 'deepseek-chat'; // 可选: deepseek-chat / deepseek-reasoner
 
-    return new Promise(function(resolve) {
-        setTimeout(function() {
-            var replies = [
-                '🤔 有意思，展开说说？',
-                '😄 哈哈说得对！',
-                '👀 我在听，继续～',
-                '💡 这个问题我也想过！',
-                '✨ 有道理！',
-                '🎯 说得好！',
-                '🤗 原来如此～',
-                '🌟 给你点赞！'
-            ];
-            resolve(replies[Math.floor(Math.random() * replies.length)]);
-        }, 1000);
+function callAI(messages) {
+    // 构建对话上下文
+    var systemMsg = '你是一个友好的聊天机器人，在多人聊天室里和大家聊天。回复简短自然，一句话即可，不要超过50字。可以用表情。';
+    var chatMsgs = [{ role: 'system', content: systemMsg }];
+    for (var i = 0; i < messages.length; i++) {
+        chatMsgs.push({ role: 'user', content: messages[i].name + '说：' + messages[i].content });
+    }
+
+    var ctrl = new AbortController();
+    setTimeout(function() { ctrl.abort(); }, 15000);
+
+    return fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        signal: ctrl.signal,
+        headers: {
+            'Authorization': 'Bearer ' + AI_KEY,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model: AI_MODEL,
+            messages: chatMsgs,
+            stream: false,
+            max_tokens: 200
+        })
+    }).then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.choices && data.choices[0]) {
+            return data.choices[0].message.content.trim();
+        }
+        return '🤖 我在思考中...';
+    }).catch(function() {
+        return '🤖 网络开小差了～';
     });
 }
 
@@ -64,8 +77,18 @@ function sendMessage() {
     }).then(function() {
         loadMessages(true);
 
-        // 调用 AI 回复
-        return callAI([{ name: name, content: text }]);
+        // 取最近几条消息作为 AI 上下文
+        var recent = [{ name: name, content: text }];
+        var items = chatBox.querySelectorAll('.msg');
+        var ctx = [];
+        for (var i = Math.max(0, items.length - 5); i < items.length; i++) {
+            var n = items[i].querySelector('.msg-name');
+            var b = items[i].querySelector('.msg-bubble');
+            if (n && b) ctx.push({ name: n.textContent.replace('AI','').trim(), content: b.textContent });
+        }
+        if (ctx.length > 1) recent = ctx;
+
+        return callAI(recent);
     }).then(function(aiReply) {
         // 保存 AI 回复
         return fetch(API + '/rest/v1/' + TABLE, {
