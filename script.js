@@ -69,7 +69,7 @@ function sendIdleMessage() {
     callAI(recent, true).then(function(reply) {
         return fetch(API + '/rest/v1/' + TABLE, {
             method: 'POST',
-            headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Accept-Profile': 'public', 'Prefer': 'return=minimal' },
             body: JSON.stringify({ name: 'AI', content: reply, is_ai: true })
         });
     }).then(function() { knownIds = {}; loadMessages(true); if(idleTimer) clearTimeout(idleTimer); idleTimer = setTimeout(sendIdleMessage, IDLE_TIME); }).catch(function(){});
@@ -135,7 +135,7 @@ function sendMessage() {
     // 后台存数据库 + 调 AI
     fetch(API + '/rest/v1/' + TABLE, {
         method: 'POST',
-        headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Accept-Profile': 'public', 'Prefer': 'return=minimal' },
         body: JSON.stringify({ name: name, content: text })
     }).then(function() {
         // 获取最近几条消息作为 AI 上下文
@@ -156,7 +156,7 @@ function sendMessage() {
         // 后台存 AI 回复
         return fetch(API + '/rest/v1/' + TABLE, {
             method: 'POST',
-            headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Content-Type': 'application/json', 'Accept-Profile': 'public', 'Prefer': 'return=minimal' },
             body: JSON.stringify({ name: 'AI', content: aiReply, is_ai: true })
         });
     }).then(function() {
@@ -202,7 +202,7 @@ function msgHtml(m) {
 
 function loadMessages(scroll) {
     fetch(API + '/rest/v1/' + TABLE + '?order=created_at.asc&limit=200', {
-        headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY }
+        headers: { 'apikey': KEY, 'Authorization': 'Bearer ' + KEY, 'Accept-Profile': 'public' }
     }).then(function(r) { return r.json(); }).then(function(data) {
         if (!data || !data.length) {
             if (Object.keys(knownIds).length === 0) {
